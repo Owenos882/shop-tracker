@@ -17,6 +17,10 @@ public class UserRepository {
         return Optional.ofNullable(byUsername.get(username));
     }
 
+    public User findByUsername(String username) {
+        return byUsername.get(username);
+    }
+
     public List<User> findAll() {
         return new ArrayList<>(byUsername.values());
     }

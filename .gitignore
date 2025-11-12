@@ -1,7 +1,24 @@
-
-/bin/
-/*.class
+# === Eclipse project metadata ===
 .settings/
-/.project
-/.classpath
+.classpath
+.project
 
+# === Java build artifacts ===
+bin/
+target/
+out/
+
+# === OS-generated files ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Temporary or cache files ===
+*.log
+*.tmp
+*.swp
+
+# === Ignore nested source duplicates (safety net) ===
+src/src/
+src/com/shoptracker/src/
+**/src/src/

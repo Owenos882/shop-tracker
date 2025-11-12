@@ -5,13 +5,12 @@ import javax.swing.*;
 import java.awt.*;
 
 public class LoginScreen extends JFrame {
-    private final UserRepository userRepo;
-    private final AccessControl accessControl;
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
 
-    public LoginScreen(UserRepository userRepo, AccessControl accessControl) {
-        this.userRepo = userRepo;
-        this.accessControl = accessControl;
-
+	public LoginScreen(UserRepository userRepo, AccessControl accessControl) {
         // ── Window setup ───────────────────────────────
         setTitle("Shop Tracker - Login");
         setSize(400, 250);

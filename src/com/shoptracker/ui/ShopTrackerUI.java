@@ -7,14 +7,13 @@ import java.awt.*;
 import java.util.List;
 
 public class ShopTrackerUI extends JFrame {
-    private final InventoryService inventoryService;
+ 
+	private static final long serialVersionUID = 1L;
+	private final InventoryService inventoryService;
     private final User currentUser;
     private final DefaultTableModel tableModel;
-    private final AccessControl accessControl;
-
     public ShopTrackerUI(User user, AccessControl accessControl) {
         this.currentUser = user;
-        this.accessControl = accessControl;
         this.inventoryService = new InventoryService(accessControl);
 
         // ── Window setup ────────────────────────────────
@@ -61,7 +60,7 @@ public class ShopTrackerUI extends JFrame {
         add(buttonPanel, BorderLayout.SOUTH);
 
         // ── Role-based permissions ───────────────────────
-        if (!accessControl.canManageStock(user)) {
+        if (!AccessControl.canManageStock(user)) {
             addBtn.setEnabled(false);
             deleteBtn.setEnabled(false);
         }

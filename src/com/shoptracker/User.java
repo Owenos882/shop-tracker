@@ -4,7 +4,7 @@ import java.util.Objects;
 
 public class User {
     private final String username;
-    private String password;     // For demo only. In real apps, store a hash.
+    private String password;     // For demo only — in real apps, use a hash
     private String fullName;
     private String email;
     private Role role;
@@ -35,4 +35,9 @@ public class User {
     public void setEmail(String email) { this.email = requireNonBlank(email, "email"); }
     public void setRole(Role role) { this.role = Objects.requireNonNull(role); }
     public void setActive(boolean active) { this.active = active; }
+
+    @Override
+    public String toString() {
+        return username + " (" + role + ")";
+    }
 }

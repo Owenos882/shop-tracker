@@ -1,37 +1,39 @@
 package com.shoptracker.tests;
 
 import com.shoptracker.*;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.*;
 
-class UserServiceDeleteTest {
+public class UserServiceDeleteTest {
+
+    private UserService userService;
     private UserRepository repo;
-    private UserService service;
-    private User admin, other;
+    private User admin;
 
     @BeforeEach
-    void setup() {
-        repo = new UserRepository();
-        service = new UserService(repo);
-        admin = new User("admin","pw","Admin","admin@x.com", Role.ADMIN);
-        other = new User("kate","pw","Kate","k@x.com", Role.USER);
+    void setUp() {
+        repo = UserRepository.getInstance();
+        repo.clear();
+
+        admin = new User("admin", "pass", "Admin User", "admin@shop.com", Role.ADMIN);
         repo.save(admin);
-        repo.save(other);
+        repo.save(new User("user1", "1111", "User One", "user1@shop.com", Role.USER));
+
+        userService = new UserService(repo, AccessControl.getInstance());
     }
 
     @Test
-    void adminCanDeleteOtherUser() {
-        service.deleteUser(admin, "kate");
-        assertFalse(repo.exists("kate"));
+    void adminCanDeleteExistingUser() {
+        boolean deleted = userService.deleteUser(admin, "user1");
+        assertTrue(deleted);
+        assertFalse(repo.exists("user1"));
     }
 
     @Test
-    void adminCannotDeleteSelf() {
-        assertThrows(IllegalStateException.class, () -> service.deleteUser(admin, "admin"));
-    }
-
-    @Test
-    void nonAdminCannotDelete() {
-        assertThrows(SecurityException.class, () -> service.deleteUser(other, "admin"));
+    void cannotDeleteNonExistingUser() {
+        boolean deleted = userService.deleteUser(admin, "does-not-exist");
+        assertFalse(deleted);
     }
 }

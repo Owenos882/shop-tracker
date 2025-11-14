@@ -1,27 +1,37 @@
 package com.shoptracker.tests;
 
-import com.shoptracker.*;
+import com.shoptracker.AccessControl;
+import com.shoptracker.Role;
+import com.shoptracker.User;
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.*;
 
-class AccessControlTest {
+public class AccessControlTest {
 
     @Test
-    void adminAndManagerCanManageStock_userCannot() {
-        User admin = new User("a","p","A","a@x.com", Role.ADMIN);
-        User mgr   = new User("m","p","M","m@x.com", Role.MANAGER);
-        User usr   = new User("u","p","U","u@x.com", Role.USER);
+    void adminAndManagerCanManageStockButUserCannot() {
+        AccessControl ac = AccessControl.getInstance();
 
-        assertTrue(AccessControl.canManageStock(admin));
-        assertTrue(AccessControl.canManageStock(mgr));
-        assertFalse(AccessControl.canManageStock(usr));
+        User admin = new User("admin", "pw", "Admin User", "admin@shop.com", Role.ADMIN);
+        User manager = new User("manager", "pw", "Manager User", "manager@shop.com", Role.MANAGER);
+        User user = new User("user", "pw", "Regular User", "user@shop.com", Role.USER);
+
+        assertTrue(ac.canManageStock(admin));
+        assertTrue(ac.canManageStock(manager));
+        assertFalse(ac.canManageStock(user));
     }
 
     @Test
-    void onlyAdminCanManageUsers() {
-        User admin = new User("a","p","A","a@x.com", Role.ADMIN);
-        User mgr   = new User("m","p","M","m@x.com", Role.MANAGER);
-        assertTrue(AccessControl.canManageUsers(admin));
-        assertFalse(AccessControl.canManageUsers(mgr));
+    void adminAndManagerCanManageUsersButUserCannot() {
+        AccessControl ac = AccessControl.getInstance();
+
+        User admin = new User("admin", "pw", "Admin User", "admin@shop.com", Role.ADMIN);
+        User manager = new User("manager", "pw", "Manager User", "manager@shop.com", Role.MANAGER);
+        User user = new User("user", "pw", "Regular User", "user@shop.com", Role.USER);
+
+        assertTrue(ac.canManageUsers(admin));
+        assertTrue(ac.canManageUsers(manager));
+        assertFalse(ac.canManageUsers(user));
     }
 }

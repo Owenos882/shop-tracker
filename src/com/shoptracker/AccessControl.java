@@ -1,22 +1,30 @@
 package com.shoptracker;
 
-public class AccessControl {
+public final class AccessControl {
 
-    public static boolean isAdmin(User u) {
-        return u != null && u.getRole() == Role.ADMIN;
+    private static final AccessControl INSTANCE = new AccessControl();
+
+    private AccessControl() {}
+
+    public static AccessControl getInstance() {
+        return INSTANCE;
     }
 
-    public static boolean isManager(User u) {
-        return u != null && u.getRole() == Role.MANAGER;
+    public boolean canManageStock(User user) {
+        return user != null &&
+                (user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER);
     }
 
-    /** Admin OR Manager can manage stock (add/remove). */
-    public static boolean canManageStock(User u) {
-        return isAdmin(u) || isManager(u);
+    public boolean canManageUsers(User user) {
+        return user != null &&
+                (user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER);
     }
 
-    /** Only Admin can manage users (create/delete/modify roles). */
-    public static boolean canManageUsers(User u) {
-        return isAdmin(u);
+    public boolean isAdmin(User user) {
+        return user != null && user.getRole() == Role.ADMIN;
+    }
+
+    public boolean isManager(User user) {
+        return user != null && user.getRole() == Role.MANAGER;
     }
 }

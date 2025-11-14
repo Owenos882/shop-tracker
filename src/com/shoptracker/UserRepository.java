@@ -3,7 +3,15 @@ package com.shoptracker;
 import java.util.*;
 
 public class UserRepository {
+
+    private static final UserRepository INSTANCE = new UserRepository();
     private final Map<String, User> byUsername = new HashMap<>();
+
+    private UserRepository() {}
+
+    public static UserRepository getInstance() {
+        return INSTANCE;
+    }
 
     public boolean exists(String username) {
         return byUsername.containsKey(username);

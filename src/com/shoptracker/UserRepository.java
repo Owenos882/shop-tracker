@@ -2,12 +2,18 @@ package com.shoptracker;
 
 import java.util.*;
 
-public class UserRepository {
+/**
+ * Simple in-memory repository of User objects.
+ * Singleton used across the application.
+ */
+public final class UserRepository {
 
     private static final UserRepository INSTANCE = new UserRepository();
     private final Map<String, User> byUsername = new HashMap<>();
 
-    private UserRepository() {}
+    private UserRepository() {
+        // Singleton
+    }
 
     public static UserRepository getInstance() {
         return INSTANCE;

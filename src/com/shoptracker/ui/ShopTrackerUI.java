@@ -1,24 +1,21 @@
 package com.shoptracker.ui;
 
 import com.shoptracker.*;
-
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.util.List;
 
 public class ShopTrackerUI extends JFrame {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private final InventoryService inventoryService;
-    private final User currentUser;
+	private final transient InventoryService inventoryService;
+	private final transient User currentUser;
     private final DefaultTableModel tableModel;
     private final JTable table;
 
-    // Column indexes
     private static final int COL_ID = 0;
     private static final int COL_NAME = 1;
     private static final int COL_QTY = 2;
@@ -30,33 +27,31 @@ public class ShopTrackerUI extends JFrame {
         this.currentUser = user;
         this.inventoryService = InventoryService.getInstance();
 
-        // Seed default stock once
         inventoryService.seedDefaultStockIfEmpty();
 
         setTitle("Shop Tracker – Inventory Manager");
         setSize(1000, 550);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         getContentPane().setBackground(UIConstants.BG_COLOR);
         setLayout(new BorderLayout(10, 10));
 
         // Header
-        JPanel header = new JPanel();
-        header.setBackground(UIConstants.BG_COLOR);
         JLabel headerLabel = new JLabel(
                 "Logged in as: " + user.getFullName() + " (" + user.getRole() + ")"
         );
         headerLabel.setFont(UIConstants.FONT_BOLD);
+        JPanel header = new JPanel();
+        header.setBackground(UIConstants.BG_COLOR);
         header.add(headerLabel);
         add(header, BorderLayout.NORTH);
 
-        // Table with + / - columns
+        // Table setup
         tableModel = new DefaultTableModel(
-                new Object[]{"ID", "Name", "Quantity", "Price (€)", "+", "-"}, 0) {
-
+                new Object[]{"ID", "Name", "Quantity", "Price (€)", "+", "-"}, 0
+        ) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                // Make table cells non-editable; interaction via mouse clicks
+            public boolean isCellEditable(int row, int col) {
                 return false;
             }
         };
@@ -68,19 +63,14 @@ public class ShopTrackerUI extends JFrame {
         table.getColumnModel().getColumn(COL_PLUS).setMaxWidth(50);
         table.getColumnModel().getColumn(COL_MINUS).setMaxWidth(50);
 
-        JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.getViewport().setBackground(Color.WHITE);
-        add(scrollPane, BorderLayout.CENTER);
+        add(new JScrollPane(table), BorderLayout.CENTER);
 
-        // Mouse listener for + / - clicks
+        // Quantity adjust listener
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 int row = table.rowAtPoint(e.getPoint());
                 int col = table.columnAtPoint(e.getPoint());
-                if (row < 0 || col < 0) {
-                    return;
-                }
                 if (col == COL_PLUS) {
                     handleAdjustQuantity(row, +1);
                 } else if (col == COL_MINUS) {
@@ -89,20 +79,19 @@ public class ShopTrackerUI extends JFrame {
             }
         });
 
-        // Bottom button panel
-        JPanel buttons = new JPanel();
-        buttons.setBackground(UIConstants.BG_COLOR);
-
+        // Buttons bottom
         JButton addBtn = UIConstants.createModernButton("Add Product");
         JButton delBtn = UIConstants.createModernButton("Delete Product");
-        JButton refBtn = UIConstants.createModernButton("Refresh");
+        JButton refreshBtn = UIConstants.createModernButton("Refresh");
         JButton userMgmtBtn = UIConstants.createModernButton("Manage Users");
         JButton logBtn = UIConstants.createModernButton("View Activity Log");
         JButton outBtn = UIConstants.createModernButton("Logout");
 
+        JPanel buttons = new JPanel();
+        buttons.setBackground(UIConstants.BG_COLOR);
         buttons.add(addBtn);
         buttons.add(delBtn);
-        buttons.add(refBtn);
+        buttons.add(refreshBtn);
         buttons.add(userMgmtBtn);
         buttons.add(logBtn);
         buttons.add(outBtn);
@@ -111,6 +100,7 @@ public class ShopTrackerUI extends JFrame {
 
         // Permissions
         AccessControl ac = AccessControl.getInstance();
+
         if (!ac.canManageStock(user)) {
             addBtn.setEnabled(false);
             delBtn.setEnabled(false);
@@ -120,10 +110,10 @@ public class ShopTrackerUI extends JFrame {
             logBtn.setEnabled(false);
         }
 
-        // Actions
+        // Button actions
         addBtn.addActionListener(e -> addProduct());
         delBtn.addActionListener(e -> deleteProduct());
-        refBtn.addActionListener(e -> refreshTable());
+        refreshBtn.addActionListener(e -> refreshTable());
         outBtn.addActionListener(e -> logout());
         userMgmtBtn.addActionListener(e -> openUserManagement());
         logBtn.addActionListener(e -> showActivityLog());
@@ -133,37 +123,31 @@ public class ShopTrackerUI extends JFrame {
 
     private void handleAdjustQuantity(int row, int delta) {
         String id = (String) tableModel.getValueAt(row, COL_ID);
-        int currentQty = (int) tableModel.getValueAt(row, COL_QTY);
 
-        if (delta < 0 && currentQty == 0) {
-            JOptionPane.showMessageDialog(this,
-                    "Stock cannot go below zero.",
-                    "Quantity Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
+        boolean ok = inventoryService.adjustQuantity(currentUser, id, delta);
+        if (!ok) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Could not adjust quantity.",
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
-
-        boolean success = inventoryService.adjustQuantity(currentUser, id, delta);
-        if (!success) {
-            JOptionPane.showMessageDialog(this,
-                    "Could not adjust quantity (product missing or below zero).",
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
         refreshTable();
     }
 
     private void addProduct() {
         try {
-            String id = JOptionPane.showInputDialog(this, "Enter Product ID:");
-            if (id == null) return;
-
-            String name = JOptionPane.showInputDialog(this, "Enter Product Name:");
-            if (name == null) return;
-
-            int qty = Integer.parseInt(JOptionPane.showInputDialog(this, "Enter Quantity:"));
-            double price = Double.parseDouble(JOptionPane.showInputDialog(this, "Enter Price (€):"));
+            String id = JOptionPane.showInputDialog(this, "Product ID:");
+            if (id == null) {
+                return;
+            }
+            String name = JOptionPane.showInputDialog(this, "Product Name:");
+            if (name == null) {
+                return;
+            }
+            int qty = Integer.parseInt(JOptionPane.showInputDialog(this, "Quantity:"));
+            double price = Double.parseDouble(JOptionPane.showInputDialog(this, "Price (€):"));
 
             inventoryService.addProduct(currentUser, new Product(id, name, qty, price));
             refreshTable();
@@ -173,7 +157,7 @@ public class ShopTrackerUI extends JFrame {
     }
 
     private void deleteProduct() {
-        String id = JOptionPane.showInputDialog(this, "Enter Product ID to Delete:");
+        String id = JOptionPane.showInputDialog(this, "Product ID to Delete:");
         if (id != null) {
             inventoryService.removeProduct(currentUser, id);
             refreshTable();
@@ -182,15 +166,14 @@ public class ShopTrackerUI extends JFrame {
 
     private void refreshTable() {
         tableModel.setRowCount(0);
-        List<Product> products = inventoryService.getAllProducts();
-        for (Product p : products) {
+        for (Product p : inventoryService.getAllProducts()) {
             tableModel.addRow(new Object[]{
                     p.getId(),
                     p.getName(),
                     p.getQuantity(),
                     p.getPrice(),
-                    "     +",
-                    "     -"
+                    "+",
+                    "-"
             });
         }
     }
@@ -205,26 +188,21 @@ public class ShopTrackerUI extends JFrame {
     }
 
     private void showActivityLog() {
-        ActivityLogService logService = ActivityLogService.getInstance();
-        java.util.List<String> entries = logService.getEntries();
-
+        var entries = ActivityLogService.getInstance().getEntries();
         if (entries.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "No activity logged yet.",
-                    "Activity Log",
-                    JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "No activity logged yet.");
             return;
         }
 
         JList<String> list = new JList<>(entries.toArray(new String[0]));
-        list.setFont(UIConstants.FONT_REGULAR);
+        JScrollPane pane = new JScrollPane(list);
+        pane.setPreferredSize(new Dimension(700, 300));
 
-        JScrollPane scrollPane = new JScrollPane(list);
-        scrollPane.setPreferredSize(new Dimension(700, 300));
-
-        JOptionPane.showMessageDialog(this,
-                scrollPane,
+        JOptionPane.showMessageDialog(
+                this,
+                pane,
                 "Activity Log",
-                JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.INFORMATION_MESSAGE
+        );
     }
 }

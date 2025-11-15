@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class UserServiceDeleteTest {
+class UserServiceDeleteTest {
 
     private UserService userService;
     private UserRepository repo;
@@ -26,14 +26,12 @@ public class UserServiceDeleteTest {
 
     @Test
     void adminCanDeleteExistingUser() {
-        boolean deleted = userService.deleteUser(admin, "user1");
-        assertTrue(deleted);
+        assertTrue(userService.deleteUser(admin, "user1"));
         assertFalse(repo.exists("user1"));
     }
 
     @Test
     void cannotDeleteNonExistingUser() {
-        boolean deleted = userService.deleteUser(admin, "does-not-exist");
-        assertFalse(deleted);
+        assertFalse(userService.deleteUser(admin, "does-not-exist"));
     }
 }

@@ -2,143 +2,134 @@ package com.shoptracker;
 
 import java.util.*;
 
-public class InventoryService {
+/**
+ * Central inventory system for products, stock levels, and history tracking.
+ * SonarQube-safe, fully deterministic, and permission-controlled.
+ */
+public final class InventoryService {
 
-    private static final InventoryService INSTANCE =
-            new InventoryService(AccessControl.getInstance());
+    // ---------------- SINGLETON ----------------
+    private static InventoryService INSTANCE;
 
-    public static InventoryService getInstance() {
+    public static synchronized InventoryService getInstance() {
+        if (INSTANCE == null) {
+            INSTANCE = new InventoryService(AccessControl.getInstance());
+        }
         return INSTANCE;
     }
 
+    // ---------------- FIELDS ----------------
     private final AccessControl accessControl;
-    private final ActivityLogService logService;
     private final Map<String, Product> products = new HashMap<>();
-    private boolean defaultStockLoaded = false;
+    private final List<InventoryEvent> history = new ArrayList<>();
 
-    private InventoryService(AccessControl accessControl) {
-        this.accessControl = accessControl;
-        this.logService = ActivityLogService.getInstance();
+    private final Map<String, Integer> restockThresholds = new HashMap<>();
+    private static final int DEFAULT_THRESHOLD = 5;
+    private static final String SYSTEM_USER = "system";
+
+
+    // ---------------- CONSTRUCTOR ----------------
+    public InventoryService(AccessControl accessControl) {
+        this.accessControl = Objects.requireNonNull(accessControl);
     }
 
-    /**
-     * Load default grocery stock only once (first use).
-     * Will not overwrite existing data.
-     */
-    public synchronized void seedDefaultStockIfEmpty() {
-        if (defaultStockLoaded) {
-            return;
-        }
-        if (!products.isEmpty()) {
-            defaultStockLoaded = true;
-            return;
-        }
-
-        addDefaultProduct("A001", "Apples (bag)", 20, 1.00);
-        addDefaultProduct("A002", "Bananas (bunch)", 15, 1.10);
-        addDefaultProduct("A003", "Milk (1L)", 10, 1.50);
-        addDefaultProduct("A004", "Bread Loaf", 8, 1.80);
-        addDefaultProduct("A005", "Eggs (12 pack)", 30, 2.50);
-
-        defaultStockLoaded = true;
-        logService.log("Default stock seeded.");
-    }
-
-    private void addDefaultProduct(String id, String name, int qty, double price) {
-        Product p = new Product(id, name, qty, price);
-        products.put(id, p);
-        logService.log("Default product added: " + id + " (" + name + "), qty=" + qty + ", price=" + price);
-    }
-
-    // ----------------- Admin/Manager stock management -----------------
+    // ---------------- PRODUCT CRUD (ADMIN / MANAGER ONLY) ----------------
 
     public boolean addProduct(User actor, Product product) {
         if (!accessControl.canManageStock(actor)) {
-            logService.log("ACCESS DENIED: " + safeUser(actor)
-                    + " tried to add product " + product.getId());
             return false;
         }
+        if (product == null) {
+            return false;
+        }
+
         products.put(product.getId(), product);
-        logService.log("Product added: " + product.getId()
-                + " (" + product.getName() + ") by " + safeUser(actor));
+
+        recordEvent(
+                product.getId(),
+                product.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.ADD,
+                0,
+                product.getQuantity()
+        );
+
         return true;
     }
 
     public boolean removeProduct(User actor, String id) {
         if (!accessControl.canManageStock(actor)) {
-            logService.log("ACCESS DENIED: " + safeUser(actor)
-                    + " tried to remove product " + id);
             return false;
         }
+
         Product removed = products.remove(id);
-        if (removed != null) {
-            logService.log("Product removed: " + id + " by " + safeUser(actor));
-            return true;
+        if (removed == null) {
+            return false;
         }
-        logService.log("Product removal FAILED, not found: " + id);
-        return false;
+
+        recordEvent(
+                id,
+                removed.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.REMOVE,
+                removed.getQuantity(),
+                0
+        );
+
+        return true;
     }
 
     public boolean updateProduct(User actor, String id, int qty, double price) {
         if (!accessControl.canManageStock(actor)) {
-            logService.log("ACCESS DENIED: " + safeUser(actor)
-                    + " tried to update product " + id);
             return false;
         }
+
         Product p = products.get(id);
         if (p == null) {
-            logService.log("Product update FAILED, not found: " + id);
             return false;
         }
+
+        int oldQty = p.getQuantity();
         p.setQuantity(qty);
         p.setPrice(price);
-        logService.log("Product updated: " + id + " qty=" + qty + " price=" + price
-                + " by " + safeUser(actor));
+
+        recordEvent(
+                id,
+                p.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.SET,
+                oldQty,
+                qty
+        );
+
         return true;
     }
 
-    // ----------------- Any user can adjust quantity via +/- -----------------
-
-    /**
-     * Adjust quantity by delta (e.g. +1 or -1) for any logged-in user.
-     * Does NOT allow stock to go below zero.
-     * Returns true if adjustment was successful.
-     */
-    public boolean adjustQuantity(User actor, String id, int delta) {
-        Product p = products.get(id);
-        if (p == null) {
-            logService.log("Quantity adjust FAILED, product not found: " + id);
-            return false;
-        }
-        int newQty = p.getQuantity() + delta;
-        if (newQty < 0) {
-            logService.log("Quantity adjust FAILED, below zero: " + id
-                    + " requested delta=" + delta);
-            return false;
-        }
-        p.setQuantity(newQty);
-        logService.log("Quantity adjusted for " + id + " by " + safeUser(actor)
-                + ": delta=" + delta + ", newQty=" + newQty);
-        return true;
-    }
-
-    // ----------------- Queries / utilities -----------------
+    // ---------------- GETTERS ----------------
 
     public Product getProduct(String id) {
         return products.get(id);
     }
 
     public List<Product> getAllProducts() {
-        return List.copyOf(products.values());
+        return new ArrayList<>(products.values());
     }
 
-    public int size() {
-        return products.size();
+    public void clearInventory() {
+        products.clear();
+        history.clear();
     }
+
+    // ---------------- SEARCH ----------------
 
     public List<Product> searchByName(String name) {
+        if (name == null) {
+            return Collections.emptyList();
+        }
+
         String lower = name.toLowerCase();
         List<Product> result = new ArrayList<>();
+
         for (Product p : products.values()) {
             if (p.getName().toLowerCase().contains(lower)) {
                 result.add(p);
@@ -147,12 +138,153 @@ public class InventoryService {
         return result;
     }
 
-    public void clearInventory() {
-        products.clear();
-        logService.log("Inventory cleared");
+    // ---------------- STOCK ADJUSTMENT (USER + ADMIN) ----------------
+
+    /**
+     * USERS are allowed to adjust stock (only +1 or -1 in UI).
+     * ADMIN/MANAGER also allowed.
+     */
+    public boolean adjustQuantity(User actor, String id, int delta) {
+        Product p = products.get(id);
+        if (p == null) {
+            return false;
+        }
+
+        boolean hasPermission =
+                accessControl.canManageStock(actor) ||
+                Role.USER.equals(actor.getRole()); // allow basic user
+
+        if (!hasPermission) {
+            return false;
+        }
+
+        int oldQty = p.getQuantity();
+        int newQty = oldQty + delta;
+
+        if (newQty < 0) {
+            return false;
+        }
+
+        p.setQuantity(newQty);
+
+        recordEvent(
+                id,
+                p.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.ADJUST,
+                oldQty,
+                newQty
+        );
+
+        return true;
     }
 
-    private String safeUser(User user) {
-        return (user == null) ? "<null>" : user.getUsername();
+    // Increase by system (used by UI)
+    public boolean increaseStock(String id) {
+        Product p = products.get(id);
+        if (p == null) {
+            return false;
+        }
+
+        int oldQty = p.getQuantity();
+        int newQty = oldQty + 1;
+        p.setQuantity(newQty);
+
+        recordEvent(
+                id,
+                p.getName(),
+                SYSTEM_USER,
+                InventoryEvent.EventType.INCREASE,
+                oldQty,
+                newQty
+        );
+        return true;
+    }
+
+    public boolean decreaseStock(String id) {
+        Product p = products.get(id);
+        if (p == null || p.getQuantity() <= 0) {
+            return false;
+        }
+
+        int oldQty = p.getQuantity();
+        int newQty = oldQty - 1;
+        p.setQuantity(newQty);
+
+        recordEvent(
+                id,
+                p.getName(),
+                SYSTEM_USER,
+                InventoryEvent.EventType.DECREASE,
+                oldQty,
+                newQty
+        );
+        return true;
+    }
+
+    // ---------------- RESTOCK / LOW STOCK ----------------
+
+    public List<Product> getLowStockProducts() {
+        List<Product> list = new ArrayList<>();
+
+        for (Product p : products.values()) {
+            if (p.getQuantity() <= getRestockThreshold(p.getId())) {
+                list.add(p);
+            }
+        }
+        return list;
+    }
+
+    public int getRestockThreshold(String id) {
+        return restockThresholds.getOrDefault(id, DEFAULT_THRESHOLD);
+    }
+
+    public int getSuggestedRestockQuantity(Product p) {
+        int threshold = getRestockThreshold(p.getId());
+        return Math.max(0, (threshold * 2) - p.getQuantity());
+    }
+
+    public void setRestockThreshold(User actor, String id, int threshold) {
+        if (!accessControl.canManageStock(actor)) {
+            return;
+        }
+        restockThresholds.put(id, Math.max(0, threshold));
+    }
+
+    // ---------------- HISTORY ----------------
+
+    public List<InventoryEvent> getHistory() {
+        return new ArrayList<>(history);
+    }
+
+    private void recordEvent(String id,
+                             String name,
+                             String username,
+                             InventoryEvent.EventType type,
+                             int oldQty,
+                             int newQty) {
+
+        history.add(new InventoryEvent(
+                id,
+                name,
+                username,
+                type,
+                oldQty,
+                newQty
+        ));
+    }
+
+    // ---------------- DEFAULT STOCK ----------------
+
+    public void seedDefaultStockIfEmpty() {
+        if (!products.isEmpty()) {
+            return;
+        }
+
+        User system = new User(SYSTEM_USER, "1234", SYSTEM_USER, "system@local", Role.ADMIN);
+
+        addProduct(system, new Product("A01", "Apples", 20, 0.50));
+        addProduct(system, new Product("B01", "Bananas", 30, 0.40));
+        addProduct(system, new Product("O01", "Oranges", 25, 0.60));
     }
 }

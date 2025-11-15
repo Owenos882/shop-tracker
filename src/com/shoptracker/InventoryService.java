@@ -1,127 +1,111 @@
 package com.shoptracker;
 
-import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * FINAL stable InventoryService with:
- * - CRUD operations
- * - History via InventoryEvent
- * - Low stock threshold + suggestions
- * - increaseStock/decreaseStock
- * - adjustQuantity(User, String, int)
- * - seedDefaultStockIfEmpty()
- * - getInstance() singleton support
+ * Central inventory system for products, stock levels, and history tracking.
+ * SonarQube-safe, fully deterministic, and permission-controlled.
  */
-public class InventoryService {
+public final class InventoryService {
 
-    // ====== Singleton (some UI code calls getInstance()) ======
+    // ---------------- SINGLETON ----------------
     private static InventoryService INSTANCE;
 
-    public static InventoryService getInstance() {
+    public static synchronized InventoryService getInstance() {
         if (INSTANCE == null) {
             INSTANCE = new InventoryService(AccessControl.getInstance());
         }
         return INSTANCE;
     }
 
-    // ====== Inner InventoryEvent class ======
-    public static final class InventoryEvent {
-
-        public enum Type {
-            ADD,
-            REMOVE,
-            INCREASE,
-            DECREASE,
-            UPDATE
-        }
-
-        private final String productId;
-        private final String productName;
-        private final String username;
-        private final int delta;
-        private final int newQuantity;
-        private final Type type;
-        private final LocalDateTime timestamp;
-
-        public InventoryEvent(String productId,
-                              String productName,
-                              String username,
-                              int delta,
-                              int newQuantity,
-                              Type type,
-                              LocalDateTime timestamp) {
-
-            this.productId = productId;
-            this.productName = productName;
-            this.username = username;
-            this.delta = delta;
-            this.newQuantity = newQuantity;
-            this.type = type;
-            this.timestamp = timestamp;
-        }
-
-        public String getProductId()     { return productId; }
-        public String getProductName()   { return productName; }
-        public String getUsername()      { return username; }
-        public int getDelta()            { return delta; }
-        public int getNewQuantity()      { return newQuantity; }
-        public Type getType()            { return type; }
-        public LocalDateTime getTimestamp() { return timestamp; }
-    }
-
-    // ====== Fields ======
+    // ---------------- FIELDS ----------------
     private final AccessControl accessControl;
     private final Map<String, Product> products = new HashMap<>();
     private final List<InventoryEvent> history = new ArrayList<>();
+
     private final Map<String, Integer> restockThresholds = new HashMap<>();
-
     private static final int DEFAULT_THRESHOLD = 5;
+    private static final String SYSTEM_USER = "system";
 
-    // ====== Constructor ======
+
+    // ---------------- CONSTRUCTOR ----------------
     public InventoryService(AccessControl accessControl) {
-        this.accessControl = accessControl;
+        this.accessControl = Objects.requireNonNull(accessControl);
     }
 
-    // ====== CRUD ======
+    // ---------------- PRODUCT CRUD (ADMIN / MANAGER ONLY) ----------------
 
     public boolean addProduct(User actor, Product product) {
-        if (!accessControl.canManageStock(actor)) return false;
+        if (!accessControl.canManageStock(actor)) {
+            return false;
+        }
+        if (product == null) {
+            return false;
+        }
 
         products.put(product.getId(), product);
-        recordEvent(product.getId(), product.getName(), actor.getUsername(),
-                product.getQuantity(), product.getQuantity(), InventoryEvent.Type.ADD);
+
+        recordEvent(
+                product.getId(),
+                product.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.ADD,
+                0,
+                product.getQuantity()
+        );
 
         return true;
     }
 
     public boolean removeProduct(User actor, String id) {
-        if (!accessControl.canManageStock(actor)) return false;
+        if (!accessControl.canManageStock(actor)) {
+            return false;
+        }
 
         Product removed = products.remove(id);
-        if (removed == null) return false;
+        if (removed == null) {
+            return false;
+        }
 
-        recordEvent(id, removed.getName(), actor.getUsername(),
-                -removed.getQuantity(), 0, InventoryEvent.Type.REMOVE);
+        recordEvent(
+                id,
+                removed.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.REMOVE,
+                removed.getQuantity(),
+                0
+        );
 
         return true;
     }
 
     public boolean updateProduct(User actor, String id, int qty, double price) {
-        if (!accessControl.canManageStock(actor)) return false;
+        if (!accessControl.canManageStock(actor)) {
+            return false;
+        }
 
         Product p = products.get(id);
-        if (p == null) return false;
+        if (p == null) {
+            return false;
+        }
 
         int oldQty = p.getQuantity();
         p.setQuantity(qty);
         p.setPrice(price);
 
-        recordEvent(id, p.getName(), actor.getUsername(),
-                qty - oldQty, qty, InventoryEvent.Type.UPDATE);
+        recordEvent(
+                id,
+                p.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.SET,
+                oldQty,
+                qty
+        );
 
         return true;
     }
+
+    // ---------------- GETTERS ----------------
 
     public Product getProduct(String id) {
         return products.get(id);
@@ -136,10 +120,16 @@ public class InventoryService {
         history.clear();
     }
 
-    // ====== Search ======
+    // ---------------- SEARCH ----------------
+
     public List<Product> searchByName(String name) {
+        if (name == null) {
+            return Collections.emptyList();
+        }
+
         String lower = name.toLowerCase();
         List<Product> result = new ArrayList<>();
+
         for (Product p : products.values()) {
             if (p.getName().toLowerCase().contains(lower)) {
                 result.add(p);
@@ -148,99 +138,153 @@ public class InventoryService {
         return result;
     }
 
-    // ====== Stock +/- ======
+    // ---------------- STOCK ADJUSTMENT (USER + ADMIN) ----------------
 
+    /**
+     * USERS are allowed to adjust stock (only +1 or -1 in UI).
+     * ADMIN/MANAGER also allowed.
+     */
+    public boolean adjustQuantity(User actor, String id, int delta) {
+        Product p = products.get(id);
+        if (p == null) {
+            return false;
+        }
+
+        boolean hasPermission =
+                accessControl.canManageStock(actor) ||
+                Role.USER.equals(actor.getRole()); // allow basic user
+
+        if (!hasPermission) {
+            return false;
+        }
+
+        int oldQty = p.getQuantity();
+        int newQty = oldQty + delta;
+
+        if (newQty < 0) {
+            return false;
+        }
+
+        p.setQuantity(newQty);
+
+        recordEvent(
+                id,
+                p.getName(),
+                actor.getUsername(),
+                InventoryEvent.EventType.ADJUST,
+                oldQty,
+                newQty
+        );
+
+        return true;
+    }
+
+    // Increase by system (used by UI)
     public boolean increaseStock(String id) {
         Product p = products.get(id);
-        if (p == null) return false;
+        if (p == null) {
+            return false;
+        }
 
-        p.setQuantity(p.getQuantity() + 1);
-        recordEvent(id, p.getName(), null, +1, p.getQuantity(), InventoryEvent.Type.INCREASE);
+        int oldQty = p.getQuantity();
+        int newQty = oldQty + 1;
+        p.setQuantity(newQty);
+
+        recordEvent(
+                id,
+                p.getName(),
+                SYSTEM_USER,
+                InventoryEvent.EventType.INCREASE,
+                oldQty,
+                newQty
+        );
         return true;
     }
 
     public boolean decreaseStock(String id) {
         Product p = products.get(id);
-        if (p == null || p.getQuantity() <= 0) return false;
+        if (p == null || p.getQuantity() <= 0) {
+            return false;
+        }
 
-        p.setQuantity(p.getQuantity() - 1);
-        recordEvent(id, p.getName(), null, -1, p.getQuantity(), InventoryEvent.Type.DECREASE);
-        return true;
-    }
-
-    /**
-     * Used by UI to adjust stock by any positive or negative number.
-     */
-    public boolean adjustQuantity(User actor, String id, int delta) {
-        if (!accessControl.canManageStock(actor)) return false;
-
-        Product p = products.get(id);
-        if (p == null) return false;
-
-        int newQty = p.getQuantity() + delta;
-        if (newQty < 0) return false;
-
+        int oldQty = p.getQuantity();
+        int newQty = oldQty - 1;
         p.setQuantity(newQty);
 
-        InventoryEvent.Type type =
-                delta > 0 ? InventoryEvent.Type.INCREASE :
-                delta < 0 ? InventoryEvent.Type.DECREASE :
-                InventoryEvent.Type.UPDATE;
-
-        recordEvent(id, p.getName(), actor.getUsername(), delta, newQty, type);
+        recordEvent(
+                id,
+                p.getName(),
+                SYSTEM_USER,
+                InventoryEvent.EventType.DECREASE,
+                oldQty,
+                newQty
+        );
         return true;
     }
 
-    // ====== Low stock / threshold ======
+    // ---------------- RESTOCK / LOW STOCK ----------------
 
     public List<Product> getLowStockProducts() {
         List<Product> list = new ArrayList<>();
+
         for (Product p : products.values()) {
-            int th = getRestockThreshold(p.getId());
-            if (p.getQuantity() <= th) list.add(p);
+            if (p.getQuantity() <= getRestockThreshold(p.getId())) {
+                list.add(p);
+            }
         }
         return list;
     }
 
-    public int getRestockThreshold(String productId) {
-        return restockThresholds.getOrDefault(productId, DEFAULT_THRESHOLD);
+    public int getRestockThreshold(String id) {
+        return restockThresholds.getOrDefault(id, DEFAULT_THRESHOLD);
     }
 
     public int getSuggestedRestockQuantity(Product p) {
-        int th = getRestockThreshold(p.getId());
-        int target = th * 2;
-        return Math.max(0, target - p.getQuantity());
+        int threshold = getRestockThreshold(p.getId());
+        return Math.max(0, (threshold * 2) - p.getQuantity());
     }
 
-    public void setRestockThreshold(User actor, String productId, int threshold) {
-        if (!accessControl.canManageStock(actor)) return;
-        restockThresholds.put(productId, Math.max(0, threshold));
+    public void setRestockThreshold(User actor, String id, int threshold) {
+        if (!accessControl.canManageStock(actor)) {
+            return;
+        }
+        restockThresholds.put(id, Math.max(0, threshold));
     }
 
-    // ====== History ======
+    // ---------------- HISTORY ----------------
+
     public List<InventoryEvent> getHistory() {
         return new ArrayList<>(history);
     }
 
-    private void recordEvent(String id, String name, String user, int delta,
-                             int newQty, InventoryEvent.Type type) {
+    private void recordEvent(String id,
+                             String name,
+                             String username,
+                             InventoryEvent.EventType type,
+                             int oldQty,
+                             int newQty) {
+
         history.add(new InventoryEvent(
-                id, name, user, delta, newQty, type, LocalDateTime.now()
+                id,
+                name,
+                username,
+                type,
+                oldQty,
+                newQty
         ));
     }
 
-    // ====== Default stock population ======
+    // ---------------- DEFAULT STOCK ----------------
 
     public void seedDefaultStockIfEmpty() {
-        if (!products.isEmpty()) return;
+        if (!products.isEmpty()) {
+            return;
+        }
 
-        products.put("A01", new Product("A01", "Apples", 20, 0.50));
-        products.put("B01", new Product("B01", "Bananas", 30, 0.40));
-        products.put("O01", new Product("O01", "Oranges", 25, 0.60));
+        User system = new User(SYSTEM_USER, "1234", SYSTEM_USER, "system@local", Role.ADMIN);
 
-        // No user = system event
-        recordEvent("A01", "Apples", "system", 20, 20, InventoryEvent.Type.ADD);
-        recordEvent("B01", "Bananas", "system", 30, 30, InventoryEvent.Type.ADD);
-        recordEvent("O01", "Oranges", "system", 25, 25, InventoryEvent.Type.ADD);
+        addProduct(system, new Product("A01", "Apples", 20, 0.50));
+        addProduct(system, new Product("B01", "Bananas", 30, 0.40));
+        addProduct(system, new Product("O01", "Oranges", 25, 0.60));
     }
 }

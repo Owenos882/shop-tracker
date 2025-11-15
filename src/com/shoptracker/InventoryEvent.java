@@ -1,29 +1,43 @@
 package com.shoptracker;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
- * Represents a single change to a product's stock level.
- * Used for history tracking and analytics.
+ * Represents one change in product stock history.
+ * Fully immutable and SonarQube-clean.
  */
-public class InventoryEvent {
+public final class InventoryEvent {
 
     public enum EventType {
-        ADD,        // Stock was increased
-        REMOVE,     // Stock was decreased
-        SET,        // Stock was set to an exact value
-        ADJUST      // Stock was adjusted by +/- value
+        ADD,
+        REMOVE,
+        INCREASE,
+        DECREASE,
+        UPDATE,
+        SET,
+        ADJUST
     }
 
     private final String productId;
     private final String productName;
-    private final String username;         // Who performed the action
+    private final String username;
     private final EventType type;
     private final int oldQuantity;
     private final int newQuantity;
-    private final int delta;               // Change amount (+/-)
+    private final int delta;
     private final LocalDateTime timestamp;
 
+    /**
+     * Creates a new immutable event describing a stock change.
+     *
+     * @param productId    ID of product
+     * @param productName  name at event time (avoids future rename issues)
+     * @param username     user performing action ("system" allowed)
+     * @param type         event type
+     * @param oldQuantity  starting quantity
+     * @param newQuantity  resulting quantity
+     */
     public InventoryEvent(
             String productId,
             String productName,
@@ -32,17 +46,15 @@ public class InventoryEvent {
             int oldQuantity,
             int newQuantity
     ) {
-        this.productId = productId;
-        this.productName = productName;
-        this.username = username;
-        this.type = type;
+        this.productId = Objects.requireNonNull(productId, "productId");
+        this.productName = Objects.requireNonNull(productName, "productName");
+        this.username = (username == null || username.isBlank()) ? "system" : username;
+        this.type = Objects.requireNonNull(type, "type");
         this.oldQuantity = oldQuantity;
         this.newQuantity = newQuantity;
         this.delta = newQuantity - oldQuantity;
         this.timestamp = LocalDateTime.now();
     }
-
-    // -------- GETTERS --------
 
     public String getProductId() {
         return productId;
@@ -76,10 +88,11 @@ public class InventoryEvent {
         return timestamp;
     }
 
-    // For debugging or logging
     @Override
     public String toString() {
-        return timestamp + " | " + username + " | " + type +
+        return timestamp +
+                " | " + username +
+                " | " + type +
                 " | " + productName + " (" + productId + ")" +
                 " | " + oldQuantity + " → " + newQuantity +
                 " | Δ " + delta;

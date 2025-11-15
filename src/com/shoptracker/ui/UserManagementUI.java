@@ -11,38 +11,51 @@ public class UserManagementUI extends JFrame {
 
     private static final long serialVersionUID = 1L;
 
-    private final User currentUser;
-    private final UserRepository userRepo;
-    private final UserService userService;
+    // Safe constants (avoid “magic numbers”)
+    private static final int DEFAULT_WIDTH = 700;
+    private static final int DEFAULT_HEIGHT = 400;
+    private static final int TABLE_ROW_HEIGHT = 24;
+    private static final int GRID_ROWS = 5;
+    private static final int GRID_COLS = 2;
+    private static final int GRID_GAP = 5;
+
+    private final transient User currentUser;
+    private final transient UserRepository userRepo;
+    private final transient UserService userService;
 
     private final DefaultTableModel tableModel;
     private final JTable table;
 
-    public UserManagementUI(User currentUser) {
+    public UserManagementUI(final User currentUser) {
+
         this.currentUser = currentUser;
         this.userRepo = UserRepository.getInstance();
         this.userService = new UserService(userRepo, AccessControl.getInstance());
 
         setTitle("User Management");
-        setSize(700, 400);
+        setSize(DEFAULT_WIDTH, DEFAULT_HEIGHT);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
         getContentPane().setBackground(UIConstants.BG_COLOR);
 
+        // Header
         JLabel header = new JLabel("User Management", SwingConstants.CENTER);
         header.setFont(UIConstants.FONT_BOLD);
         header.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         add(header, BorderLayout.NORTH);
 
+        // Table
         tableModel = new DefaultTableModel(
                 new Object[]{"Username", "Full Name", "Email", "Role", "Active"}, 0);
+
         table = new JTable(tableModel);
         table.setFont(UIConstants.FONT_REGULAR);
-        table.setRowHeight(24);
+        table.setRowHeight(TABLE_ROW_HEIGHT);
         table.getTableHeader().setFont(UIConstants.FONT_BOLD);
 
         add(new JScrollPane(table), BorderLayout.CENTER);
 
+        // Buttons
         JPanel buttons = new JPanel();
         buttons.setBackground(UIConstants.BG_COLOR);
 
@@ -60,6 +73,7 @@ public class UserManagementUI extends JFrame {
 
         add(buttons, BorderLayout.SOUTH);
 
+        // Actions
         addBtn.addActionListener(e -> addUser());
         delBtn.addActionListener(e -> deleteUser());
         roleBtn.addActionListener(e -> changeRole());
@@ -90,7 +104,7 @@ public class UserManagementUI extends JFrame {
         JPasswordField passwordField = new JPasswordField();
         JComboBox<Role> roleBox = new JComboBox<>(Role.values());
 
-        JPanel panel = new JPanel(new GridLayout(5, 2, 5, 5));
+        JPanel panel = new JPanel(new GridLayout(GRID_ROWS, GRID_COLS, GRID_GAP, GRID_GAP));
         panel.add(new JLabel("Username:"));
         panel.add(usernameField);
         panel.add(new JLabel("Full Name:"));
@@ -102,8 +116,9 @@ public class UserManagementUI extends JFrame {
         panel.add(new JLabel("Role:"));
         panel.add(roleBox);
 
-        int result = JOptionPane.showConfirmDialog(this, panel,
-                "Add New User", JOptionPane.OK_CANCEL_OPTION);
+        int result = JOptionPane.showConfirmDialog(
+                this, panel, "Add New User", JOptionPane.OK_CANCEL_OPTION);
+
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
@@ -117,6 +132,7 @@ public class UserManagementUI extends JFrame {
 
             User newUser = new User(username, password, fullName, email, role);
             boolean created = userService.createUser(currentUser, newUser);
+
             if (!created) {
                 JOptionPane.showMessageDialog(this,
                         "Could not create user (maybe duplicate or no permission).",
@@ -124,6 +140,7 @@ public class UserManagementUI extends JFrame {
             } else {
                 refreshTable();
             }
+
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
                     "Error creating user: " + ex.getMessage(),
@@ -133,13 +150,16 @@ public class UserManagementUI extends JFrame {
 
     private void deleteUser() {
         int row = table.getSelectedRow();
+
         if (row < 0) {
             JOptionPane.showMessageDialog(this,
                     "Select a user row first.",
                     "Info", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+
         String username = (String) tableModel.getValueAt(row, 0);
+
         if (username.equals(currentUser.getUsername())) {
             JOptionPane.showMessageDialog(this,
                     "You cannot delete your own account.",
@@ -147,14 +167,16 @@ public class UserManagementUI extends JFrame {
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Delete user " + username + "?",
+        int confirm = JOptionPane.showConfirmDialog(
+                this, "Delete user " + username + "?",
                 "Confirm Delete", JOptionPane.YES_NO_OPTION);
+
         if (confirm != JOptionPane.YES_OPTION) {
             return;
         }
 
         boolean deleted = userService.deleteUser(currentUser, username);
+
         if (!deleted) {
             JOptionPane.showMessageDialog(this,
                     "Could not delete user (no permission or not found).",
@@ -166,23 +188,28 @@ public class UserManagementUI extends JFrame {
 
     private void changeRole() {
         int row = table.getSelectedRow();
+
         if (row < 0) {
             JOptionPane.showMessageDialog(this,
                     "Select a user row first.",
                     "Info", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+
         String username = (String) tableModel.getValueAt(row, 0);
 
         JComboBox<Role> roleBox = new JComboBox<>(Role.values());
-        int result = JOptionPane.showConfirmDialog(this, roleBox,
-                "Select new role for " + username,
+
+        int result = JOptionPane.showConfirmDialog(
+                this, roleBox, "Select new role for " + username,
                 JOptionPane.OK_CANCEL_OPTION);
+
         if (result != JOptionPane.OK_OPTION) {
             return;
         }
 
         Role newRole = (Role) roleBox.getSelectedItem();
+
         try {
             userService.changeUserRole(currentUser, username, newRole);
             refreshTable();

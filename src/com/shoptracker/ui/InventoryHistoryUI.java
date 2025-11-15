@@ -1,8 +1,7 @@
 package com.shoptracker.ui;
 
-import com.shoptracker.AccessControl;
 import com.shoptracker.InventoryService;
-import com.shoptracker.InventoryService.InventoryEvent;
+import com.shoptracker.InventoryEvent;
 import com.shoptracker.Product;
 
 import javax.swing.*;
@@ -10,7 +9,11 @@ import java.awt.*;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-public class InventoryHistoryUI extends JFrame {
+/**
+ * Displays the full history of inventory events.
+ * Read-only window.
+ */
+public final class InventoryHistoryUI extends JFrame {
 
     private static final long serialVersionUID = 1L;
 
@@ -20,12 +23,18 @@ public class InventoryHistoryUI extends JFrame {
     private final InventoryService inventoryService;
     private final JTextArea logArea;
 
-    // Fallback no-arg constructor (won't share state, but keeps old code compiling)
+    /**
+     * Legacy fallback constructor.
+     * (Keeps any old UI code compiling, but does NOT share the real inventory state.)
+     */
     public InventoryHistoryUI() {
-        this(new InventoryService(AccessControl.getInstance()));
+        this(InventoryService.getInstance());
     }
 
-    // Preferred constructor: pass the real InventoryService from your main UI
+    /**
+     * Preferred constructor — always call this version.
+     * Ensures history matches the actual active InventoryService instance.
+     */
     public InventoryHistoryUI(InventoryService inventoryService) {
         this.inventoryService = inventoryService;
 
@@ -37,11 +46,13 @@ public class InventoryHistoryUI extends JFrame {
         getContentPane().setBackground(UIConstants.BG_COLOR);
         setLayout(new BorderLayout(10, 10));
 
+        // ---- Title ----
         JLabel title = new JLabel("Inventory Change Log", SwingConstants.CENTER);
         title.setFont(UIConstants.FONT_BOLD);
         title.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         add(title, BorderLayout.NORTH);
 
+        // ---- Log output ----
         logArea = new JTextArea();
         logArea.setEditable(false);
         logArea.setFont(UIConstants.FONT_REGULAR);
@@ -51,6 +62,7 @@ public class InventoryHistoryUI extends JFrame {
         scroll.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
         add(scroll, BorderLayout.CENTER);
 
+        // ---- Close button ----
         JButton closeBtn = UIConstants.createModernButton("Close");
         closeBtn.addActionListener(e -> dispose());
 
@@ -62,6 +74,9 @@ public class InventoryHistoryUI extends JFrame {
         loadHistory();
     }
 
+    /**
+     * Loads and formats inventory events.
+     */
     private void loadHistory() {
         List<InventoryEvent> events = inventoryService.getHistory();
 
@@ -73,13 +88,17 @@ public class InventoryHistoryUI extends JFrame {
         StringBuilder sb = new StringBuilder();
 
         for (InventoryEvent e : events) {
-            Product p = inventoryService.getProduct(e.getProductId());
-            String name = (p != null) ? p.getName() : ("Product " + e.getProductId());
 
-            String ts = e.getTimestamp().format(TIME_FORMAT);
+            String timestamp = e.getTimestamp().format(TIME_FORMAT);
 
-            String changeText;
+            Product product = inventoryService.getProduct(e.getProductId());
+            String productName = (product != null)
+                    ? product.getName()
+                    : ("Product " + e.getProductId());
+
             int delta = e.getDelta();
+            String changeText;
+
             if (delta > 0) {
                 changeText = "increased by " + delta;
             } else if (delta < 0) {
@@ -88,9 +107,9 @@ public class InventoryHistoryUI extends JFrame {
                 changeText = "was updated";
             }
 
-            sb.append(ts)
+            sb.append(timestamp)
               .append(" - Stock for ")
-              .append(name)
+              .append(productName)
               .append(" (ID: ").append(e.getProductId()).append(") ")
               .append(changeText)
               .append(" (new quantity: ").append(e.getNewQuantity()).append(")")
@@ -98,6 +117,6 @@ public class InventoryHistoryUI extends JFrame {
         }
 
         logArea.setText(sb.toString());
-        logArea.setCaretPosition(0); // scroll to top
+        logArea.setCaretPosition(0); // Start at top
     }
 }

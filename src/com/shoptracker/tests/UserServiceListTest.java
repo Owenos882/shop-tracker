@@ -4,8 +4,6 @@ import com.shoptracker.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 class UserServiceListTest {
@@ -32,13 +30,8 @@ class UserServiceListTest {
 
     @Test
     void searchesByUsernameFullNameOrEmail() {
-        List<User> r1 = service.searchUsers("maria");
-        assertEquals(1, r1.size());
-
-        List<User> r2 = service.searchUsers("stone");
-        assertEquals(1, r2.size());
-
-        List<User> r3 = service.searchUsers("@x.com");
-        assertEquals(3, r3.size());
+        assertEquals(1, service.searchUsers("maria").size());
+        assertEquals(1, service.searchUsers("stone").size());
+        assertEquals(3, service.searchUsers("@x.com").size());
     }
 }

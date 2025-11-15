@@ -4,114 +4,112 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class UserService {
+/**
+ * Provides user management operations:
+ * - Create/delete user
+ * - Search users
+ * - Change roles
+ * - Reset password
+ * Uses AccessControl for authorization and ActivityLogService for audit logging.
+ */
+public final class UserService {
 
     private final UserRepository repo;
     private final AccessControl accessControl;
     private final ActivityLogService logService;
+    private static final String MSG_ACCESS_DENIED = "ACCESS DENIED";
 
-    // Constructor used in some tests / services
+
+    // Constructor used by tests or services
     public UserService(UserRepository repo) {
         this(repo, AccessControl.getInstance());
     }
 
-    // Constructor used where explicit AccessControl is passed
+    // Full constructor
     public UserService(UserRepository repo, AccessControl accessControl) {
         this.repo = repo;
         this.accessControl = accessControl;
         this.logService = ActivityLogService.getInstance();
     }
 
-    /**
-     * Create a new user.
-     * Only ADMIN or MANAGER (via canManageUsers) may create users.
-     * Returns true if created, false if duplicate or no permission.
-     */
+    // ---------------- CREATE USER ----------------
+
     public boolean createUser(User actor, User newUser) {
         if (!accessControl.canManageUsers(actor)) {
-            logService.log("ACCESS DENIED: " + safeUser(actor) + " tried to create user " + newUser.getUsername());
+            logService.log(MSG_ACCESS_DENIED + safe(actor) + " tried to create user " + newUser.getUsername());
             return false;
         }
+
         if (repo.exists(newUser.getUsername())) {
-            logService.log("User creation FAILED, duplicate username: " + newUser.getUsername());
+            logService.log("User creation FAILED (duplicate username): " + newUser.getUsername());
             return false;
         }
+
         repo.save(newUser);
-        logService.log("User created: " + newUser.getUsername() + " by " + safeUser(actor));
+        logService.log("User created: " + newUser.getUsername() + " by " + safe(actor));
         return true;
     }
 
-    /**
-     * Delete an existing user by username.
-     * Only ADMIN or MANAGER (via canManageUsers) may delete users.
-     * Returns true if deleted, false if user not found or no permission.
-     */
+    // ---------------- DELETE USER ----------------
+
     public boolean deleteUser(User actor, String username) {
         if (!accessControl.canManageUsers(actor)) {
-            logService.log("ACCESS DENIED: " + safeUser(actor) + " tried to delete user " + username);
+            logService.log(MSG_ACCESS_DENIED + safe(actor) + " tried to delete user " + username);
             return false;
         }
+
         if (!repo.exists(username)) {
-            logService.log("User deletion FAILED, user not found: " + username);
+            logService.log("User deletion FAILED (not found): " + username);
             return false;
         }
+
         repo.delete(username);
-        logService.log("User deleted: " + username + " by " + safeUser(actor));
+        logService.log("User deleted: " + username + " by " + safe(actor));
         return true;
     }
 
-    /**
-     * List all users.
-     */
+    // ---------------- LIST USERS ----------------
+
     public List<User> listUsers() {
         return repo.findAll();
     }
 
-    /**
-     * Search users by username, full name, or email (case-insensitive, partial match).
-     */
+    // ---------------- SEARCH ----------------
+
     public List<User> searchUsers(String query) {
-        String lower = query.toLowerCase();
-        List<User> result = new ArrayList<>();
+        String q = query.toLowerCase();
+        List<User> out = new ArrayList<>();
+
         for (User u : repo.findAll()) {
-            if (u.getUsername().toLowerCase().contains(lower)
-                    || u.getFullName().toLowerCase().contains(lower)
-                    || u.getEmail().toLowerCase().contains(lower)) {
-                result.add(u);
+            if (u.getUsername().toLowerCase().contains(q)
+                    || u.getFullName().toLowerCase().contains(q)
+                    || u.getEmail().toLowerCase().contains(q)) {
+                out.add(u);
             }
         }
-        return result;
+        return out;
     }
 
-    /**
-     * Change another user's role.
-     * Only ADMIN or MANAGER may change roles.
-     * Throws SecurityException if no permission.
-     * Throws IllegalArgumentException if target user not found.
-     */
+    // ---------------- CHANGE ROLE ----------------
+
     public void changeUserRole(User actor, String targetUsername, Role newRole) {
         if (!accessControl.canManageUsers(actor)) {
-            logService.log("ACCESS DENIED: " + safeUser(actor) + " tried to change role of " + targetUsername);
+            logService.log(MSG_ACCESS_DENIED + safe(actor) +
+                    " tried to change role for " + targetUsername);
             throw new SecurityException("User does not have permission to change roles.");
         }
 
-        User target = findUserOrFail(targetUsername);
-        Role oldRole = target.getRole();
+        User target = findOrFail(targetUsername);
+        Role old = target.getRole();
         target.setRole(newRole);
         repo.save(target);
 
-        logService.log("Role changed for user " + targetUsername + ": " + oldRole + " -> " + newRole
-                + " by " + safeUser(actor));
+        logService.log("Role changed for " + targetUsername + ": " + old + " -> " + newRole +
+                " by " + safe(actor));
     }
 
-    /**
-     * Forgot password / reset password flow.
-     * Validates username + email, then generates a temporary password.
-     * Returns the new password so the UI can show it once.
-     *
-     * Throws IllegalArgumentException if user not found.
-     * Throws SecurityException if email does not match.
-     */
+    // ---------------- RESET PASSWORD ----------------
+
     public String resetPassword(String username, String email) {
         Optional<User> found = repo.find(username);
         if (found.isEmpty()) {
@@ -121,34 +119,26 @@ public class UserService {
 
         User user = found.get();
         if (!user.getEmail().equalsIgnoreCase(email)) {
-            logService.log("Password reset FAILED for " + username + ": email mismatch");
+            logService.log("Password reset FAILED for " + username + " (email mismatch)");
             throw new SecurityException("Email does not match stored email.");
         }
 
-        String newPassword = generateTemporaryPassword(username);
-        user.setPassword(newPassword);
+        String temp = username + "1234"; // deterministic temp password
+        user.setPassword(temp);
         repo.save(user);
 
-        logService.log("Password reset for user " + username);
-        return newPassword;
+        logService.log("Password reset for " + username);
+        return temp;
     }
 
-    // ---- Helpers ----
+    // ---------------- Helpers ----------------
 
-    private User findUserOrFail(String username) {
-        Optional<User> found = repo.find(username);
-        if (found.isPresent()) {
-            return found.get();
-        }
-        throw new IllegalArgumentException("Target user not found: " + username);
+    private User findOrFail(String username) {
+        return repo.find(username)
+                .orElseThrow(() -> new IllegalArgumentException("Target user not found: " + username));
     }
 
-    private String generateTemporaryPassword(String username) {
-        // Simple deterministic temp password for this project
-        return username + "1234";
-    }
-
-    private String safeUser(User user) {
-        return (user == null) ? "<null>" : user.getUsername();
+    private String safe(User user) {
+        return (user == null ? "<null>" : user.getUsername());
     }
 }

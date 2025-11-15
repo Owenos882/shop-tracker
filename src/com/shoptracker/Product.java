@@ -1,16 +1,29 @@
 package com.shoptracker;
 
-public class Product {
+/**
+ * Represents an item in the store inventory.
+ */
+public final class Product {
+
     private final String id;
     private final String name;
     private int quantity;
     private double price;
 
     public Product(String id, String name, int quantity, double price) {
-        if (id == null || id.isBlank()) throw new IllegalArgumentException("Product ID required");
-        if (name == null || name.isBlank()) throw new IllegalArgumentException("Product name required");
-        if (quantity < 0) throw new IllegalArgumentException("Quantity cannot be negative");
-        if (price < 0) throw new IllegalArgumentException("Price cannot be negative");
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException("Product ID required");
+        }
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Product name required");
+        }
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Quantity cannot be negative");
+        }
+        if (price < 0) {
+            throw new IllegalArgumentException("Price cannot be negative");
+        }
+
         this.id = id;
         this.name = name;
         this.quantity = quantity;
@@ -23,12 +36,16 @@ public class Product {
     public double getPrice() { return price; }
 
     public void setQuantity(int quantity) {
-        if (quantity < 0) throw new IllegalArgumentException("Quantity cannot be negative");
+        if (quantity < 0) {
+            throw new IllegalArgumentException("Quantity cannot be negative");
+        }
         this.quantity = quantity;
     }
 
     public void setPrice(double price) {
-        if (price < 0) throw new IllegalArgumentException("Price cannot be negative");
+        if (price < 0) {
+            throw new IllegalArgumentException("Price cannot be negative");
+        }
         this.price = price;
     }
 

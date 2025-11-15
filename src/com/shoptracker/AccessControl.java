@@ -4,20 +4,26 @@ public final class AccessControl {
 
     private static final AccessControl INSTANCE = new AccessControl();
 
-    private AccessControl() {}
+    private AccessControl() {
+        // singleton
+    }
 
     public static AccessControl getInstance() {
         return INSTANCE;
     }
 
-    public boolean canManageStock(User user) {
+    // shared logic so SonarQube doesn’t see duplicated code
+    private boolean hasElevatedRole(User user) {
         return user != null &&
-                (user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER);
+               (user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER);
+    }
+
+    public boolean canManageStock(User user) {
+        return hasElevatedRole(user);
     }
 
     public boolean canManageUsers(User user) {
-        return user != null &&
-                (user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER);
+        return hasElevatedRole(user);
     }
 
     public boolean isAdmin(User user) {

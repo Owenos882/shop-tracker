@@ -5,8 +5,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import java.util.Optional;
 
-public class UserServiceForgotPasswordTest {
+class UserServiceForgotPasswordTest {
 
     private UserRepository repo;
     private UserService service;
@@ -16,17 +17,17 @@ public class UserServiceForgotPasswordTest {
         repo = UserRepository.getInstance();
         repo.clear();
 
-        User u = new User("alice", "oldpw", "Alice", "alice@shop.com", Role.USER);
-        repo.save(u);
-
+        repo.save(new User("alice", "oldpw", "Alice", "alice@shop.com", Role.USER));
         service = new UserService(repo, AccessControl.getInstance());
     }
 
     @Test
     void resetPasswordSuccess() {
         String newPw = service.resetPassword("alice", "alice@shop.com");
-        assertNotNull(newPw);
-        assertEquals(newPw, repo.find("alice").get().getPassword());
+        Optional<User> maybeAlice = repo.find("alice");
+        assertTrue(maybeAlice.isPresent());
+        assertEquals(newPw, maybeAlice.get().getPassword());
+
     }
 
     @Test

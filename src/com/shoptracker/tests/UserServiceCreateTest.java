@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class UserServiceCreateTest {
+class UserServiceCreateTest {
 
     private UserService userService;
     private UserRepository repo;
@@ -26,18 +26,16 @@ public class UserServiceCreateTest {
     @Test
     void adminCanCreateUser() {
         User alice = new User("alice", "1234", "Alice", "alice@shop.com", Role.USER);
-        boolean created = userService.createUser(admin, alice);
-
-        assertTrue(created);
+        assertTrue(userService.createUser(admin, alice));
         assertTrue(repo.exists("alice"));
     }
 
     @Test
     void cannotCreateDuplicateUser() {
-        User firstAlice = new User("alice", "1234", "Alice", "alice1@shop.com", Role.USER);
-        User secondAlice = new User("alice", "5678", "Alice 2", "alice2@shop.com", Role.USER);
+        User u1 = new User("alice", "1234", "Alice", "a1@shop.com", Role.USER);
+        User u2 = new User("alice", "xxxx", "Alice2", "a2@shop.com", Role.USER);
 
-        assertTrue(userService.createUser(admin, firstAlice));
-        assertFalse(userService.createUser(admin, secondAlice));
+        assertTrue(userService.createUser(admin, u1));
+        assertFalse(userService.createUser(admin, u2));
     }
 }

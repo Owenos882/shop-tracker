@@ -9,9 +9,16 @@ public class LoginScreen extends JFrame {
 
     private static final long serialVersionUID = 1L;
 
-    private final UserRepository userRepo;
-    private final AccessControl accessControl;
-    private final UserService userService;
+    // --- Instance UI fields ---
+    private JTextField userField;
+    private JPasswordField passField;
+    private JLabel msgLabel;
+
+    private final transient UserRepository userRepo;
+    private final transient AccessControl accessControl;
+    private final transient UserService userService;
+    private static final String ERROR_TITLE = "Error";
+
 
     public LoginScreen() {
         this.userRepo = UserRepository.getInstance();
@@ -20,23 +27,43 @@ public class LoginScreen extends JFrame {
 
         seedUsersIfEmpty();
 
+        setupWindow();
+        buildHeader();
+        buildForm();
+        buildFooter();
+    }
+
+    // ---------------------------------------------------------
+    // Window Setup
+    // ---------------------------------------------------------
+    private void setupWindow() {
         setTitle("Shop Tracker - Login");
         setSize(440, 320);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
         getContentPane().setBackground(UIConstants.BG_COLOR);
+    }
 
-        // Header
+    // ---------------------------------------------------------
+    // Header
+    // ---------------------------------------------------------
+    private void buildHeader() {
         JPanel header = new JPanel();
         header.setBackground(UIConstants.BG_COLOR);
+
         JLabel title = new JLabel("Shop Tracker Login");
         title.setFont(UIConstants.FONT_BOLD);
         title.setForeground(UIConstants.TEXT_COLOR);
+
         header.add(title);
         add(header, BorderLayout.NORTH);
+    }
 
-        // Center form
+    // ---------------------------------------------------------
+    // Form
+    // ---------------------------------------------------------
+    private void buildForm() {
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(BorderFactory.createEmptyBorder(20, 40, 20, 40));
         form.setBackground(UIConstants.PANEL_COLOR);
@@ -47,90 +74,94 @@ public class LoginScreen extends JFrame {
 
         JLabel userLbl = new JLabel("Username:");
         JLabel passLbl = new JLabel("Password:");
-        JTextField userField = new JTextField();
-        JPasswordField passField = new JPasswordField();
-
         userLbl.setFont(UIConstants.FONT_REGULAR);
         passLbl.setFont(UIConstants.FONT_REGULAR);
 
-        // modern field styling
-        userField.setFont(UIConstants.FONT_REGULAR);
-        passField.setFont(UIConstants.FONT_REGULAR);
+        userField = new JTextField();
+        passField = new JPasswordField();
 
-        Color fieldBg = Color.WHITE;
-        Color fieldBorder = new Color(180, 180, 180);
+        styleField(userField);
+        styleField(passField);
 
-        userField.setPreferredSize(new Dimension(200, 32));
-        userField.setBackground(fieldBg);
-        userField.setForeground(Color.BLACK);
-        userField.setCaretColor(Color.BLACK);
-        userField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(fieldBorder, 1),
-                BorderFactory.createEmptyBorder(5, 8, 5, 8)
-        ));
-        userField.setOpaque(true);
-
-        passField.setPreferredSize(new Dimension(200, 32));
-        passField.setBackground(fieldBg);
-        passField.setForeground(Color.BLACK);
-        passField.setCaretColor(Color.BLACK);
-        passField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(fieldBorder, 1),
-                BorderFactory.createEmptyBorder(5, 8, 5, 8)
-        ));
-        passField.setOpaque(true);
-
-        // Row 0 - username
-        gbc.gridx = 0; gbc.gridy = 0;
+        // Row 0
+        gbc.gridx = 0;
+        gbc.gridy = 0;
         form.add(userLbl, gbc);
+
         gbc.gridx = 1;
         form.add(userField, gbc);
 
-        // Row 1 - password
-        gbc.gridx = 0; gbc.gridy = 1;
+        // Row 1
+        gbc.gridx = 0;
+        gbc.gridy = 1;
         form.add(passLbl, gbc);
+
         gbc.gridx = 1;
         form.add(passField, gbc);
 
         add(form, BorderLayout.CENTER);
+    }
 
-        // Footer: message + buttons
+    private void styleField(JTextField field) {
+        field.setFont(UIConstants.FONT_REGULAR);
+        field.setPreferredSize(new Dimension(200, 32));
+        field.setBackground(Color.WHITE);
+        field.setForeground(Color.BLACK);
+        field.setCaretColor(Color.BLACK);
+
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(180, 180, 180), 1),
+                BorderFactory.createEmptyBorder(5, 8, 5, 8)
+        ));
+        field.setOpaque(true);
+    }
+
+    // ---------------------------------------------------------
+    // Footer
+    // ---------------------------------------------------------
+    private void buildFooter() {
         JPanel footer = new JPanel(new BorderLayout());
         footer.setBackground(UIConstants.BG_COLOR);
 
-        JLabel msgLbl = new JLabel("", SwingConstants.CENTER);
-        msgLbl.setForeground(Color.RED);
-        msgLbl.setFont(UIConstants.FONT_REGULAR);
+        msgLabel = new JLabel("", SwingConstants.CENTER);
+        msgLabel.setForeground(Color.RED);
+        msgLabel.setFont(UIConstants.FONT_REGULAR);
 
         JPanel buttonRow = new JPanel();
         buttonRow.setBackground(UIConstants.BG_COLOR);
+
         JButton loginBtn = UIConstants.createModernButton("Login");
         JButton forgotBtn = UIConstants.createModernButton("Forgot Password");
+
+        loginBtn.addActionListener(evt -> handleLogin());
+        forgotBtn.addActionListener(evt -> handleForgotPassword());
 
         buttonRow.add(loginBtn);
         buttonRow.add(forgotBtn);
 
-        footer.add(msgLbl, BorderLayout.CENTER);
+        footer.add(msgLabel, BorderLayout.CENTER);
         footer.add(buttonRow, BorderLayout.SOUTH);
+
         footer.setBorder(BorderFactory.createEmptyBorder(10, 40, 20, 40));
-
         add(footer, BorderLayout.SOUTH);
+    }
 
-        // Actions
-        loginBtn.addActionListener(evt -> {
-            String username = userField.getText();
-            String password = new String(passField.getPassword());
-            User user = userRepo.findByUsername(username);
+    // ---------------------------------------------------------
+    // Logic
+    // ---------------------------------------------------------
+    private void handleLogin() {
+        String username = userField.getText().trim();
+        String password = new String(passField.getPassword());
 
-            if (user != null && user.getPassword().equals(password)) {
-                new ShopTrackerUI(user).setVisible(true);
-                dispose();
-            } else {
-                msgLbl.setText("Invalid username or password");
-            }
-        });
+        User user = userRepo.findByUsername(username);
 
-        forgotBtn.addActionListener(evt -> handleForgotPassword());
+        if (user != null && user.getPassword().equals(password)) {
+            msgLabel.setText("");
+            new ShopTrackerUI(user).setVisible(true);
+            dispose();
+        } else {
+            msgLabel.setText("Invalid username or password");
+        }
     }
 
     private void handleForgotPassword() {
@@ -138,6 +169,7 @@ public class LoginScreen extends JFrame {
         if (username == null || username.isBlank()) {
             return;
         }
+
         String email = JOptionPane.showInputDialog(this, "Enter your registered email:");
         if (email == null || email.isBlank()) {
             return;
@@ -145,23 +177,34 @@ public class LoginScreen extends JFrame {
 
         try {
             String newPassword = userService.resetPassword(username, email);
-            JOptionPane.showMessageDialog(this,
+
+            JOptionPane.showMessageDialog(
+                    this,
                     "Password reset successful.\nYour new temporary password is:\n\n" + newPassword,
                     "Password Reset",
-                    JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
         } catch (IllegalArgumentException ex) {
-            JOptionPane.showMessageDialog(this,
+            JOptionPane.showMessageDialog(
+                    this,
                     "User not found: " + username,
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
+                    ERROR_TITLE,
+                    JOptionPane.ERROR_MESSAGE
+            );
         } catch (SecurityException ex) {
-            JOptionPane.showMessageDialog(this,
+            JOptionPane.showMessageDialog(
+                    this,
                     "Email does not match our records.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
+                    ERROR_TITLE,
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
+    // ---------------------------------------------------------
+    // Seed default users if repository empty
+    // ---------------------------------------------------------
     private void seedUsersIfEmpty() {
         if (userRepo.findAll().isEmpty()) {
             userRepo.save(new User("admin", "1234", "Alice Admin", "admin@shop.com", Role.ADMIN));
@@ -170,6 +213,9 @@ public class LoginScreen extends JFrame {
         }
     }
 
+    // ---------------------------------------------------------
+    // Main entry point
+    // ---------------------------------------------------------
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new LoginScreen().setVisible(true));
     }

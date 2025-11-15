@@ -9,20 +9,19 @@ import java.util.List;
 public final class ActivityLogService {
 
     private static final ActivityLogService INSTANCE = new ActivityLogService();
-
-    private final List<String> entries = new ArrayList<>();
-    private final DateTimeFormatter formatter =
+    private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private ActivityLogService() {
-    }
+    private final List<String> entries = new ArrayList<>();
+
+    private ActivityLogService() {}
 
     public static ActivityLogService getInstance() {
         return INSTANCE;
     }
 
     public synchronized void log(String message) {
-        String ts = LocalDateTime.now().format(formatter);
+        String ts = LocalDateTime.now().format(FORMATTER);
         entries.add(ts + " - " + message);
     }
 
